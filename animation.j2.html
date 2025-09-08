@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Robot Line Animation – Plain HTML + JS</title>
+    <style>
+      :root {
+        --bg: #f3f4f6;
+        --ink: #111827;
+        --muted: #6b7280;
+        --card: #ffffff;
+        --radius: 16px;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Ubuntu,
+          Cantarell,
+          Noto Sans,
+          Helvetica Neue,
+          Arial,
+          "Apple Color Emoji",
+          "Segoe UI Emoji";
+        color: var(--ink);
+      }
+      .wrap {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      h1 {
+        font-size: 1.5rem;
+        margin: 0 0 8px;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .card {
+        background: var(--card);
+        border-radius: var(--radius);
+        box-shadow: 0 6px 20px rgba(17, 24, 39, 0.08);
+        padding: 16px;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: center;
+        font-size: 0.9rem;
+        margin-bottom: 10px;
+      }
+      .legend .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        display: inline-block;
+      }
+      .legend .sq {
+        width: 12px;
+        height: 12px;
+        display: inline-block;
+        border-radius: 3px;
+      }
+      .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      button,
+      select,
+      input[type="range"] {
+        font: inherit;
+      }
+      button {
+        border: 1px solid #d1d5db;
+        background: #fff;
+        padding: 8px 12px;
+        border-radius: 999px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #f9fafb;
+      }
+      button.primary {
+        background: #111827;
+        color: #fff;
+        border-color: #111827;
+      }
+      button.outline {
+        background: #fff;
+      }
+      select {
+        border: 1px solid #d1d5db;
+        border-radius: 12px;
+        padding: 6px 10px;
+      }
+      .time {
+        font-variant-numeric: tabular-nums;
+        color: #374151;
+      }
+      details {
+        margin-top: 16px;
+      }
+      details summary {
+        cursor: pointer;
+        color: #6b7280;
+        font-size: 0.95rem;
+      }
+      pre {
+        background: #f9fafb;
+        padding: 12px;
+        border-radius: 12px;
+        overflow: auto;
+      }
+      code {
+        background: #f3f4f6;
+        padding: 1px 4px;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div id="legend" class="legend"></div>
+
+      <div class="card">
+        <svg
+          id="stage"
+          viewBox="0 0 900 220"
+          style="width: 100%; height: auto"
+        ></svg>
+        <svg
+          id="markers"
+          viewBox="0 0 900 16"
+          style="width: 100%; height: auto; margin-top: 6px"
+        ></svg>
+
+        <div class="controls" style="margin-top: 10px">
+          <div class="row">
+            <button id="playBtn" class="primary">Pause</button>
+            <button id="stepBack" class="outline">⟸ Frame</button>
+            <button id="stepFwd" class="outline">Frame ⟹</button>
+
+            <span style="margin-left: 12px">Speed</span>
+            <select id="speedSel">
+              <option>0.25</option>
+              <option>0.5</option>
+              <option selected>1</option>
+              <option>1.5</option>
+              <option>2</option>
+              <option>3</option>
+              <option>4</option>
+            </select>
+
+            <span class="time" id="timeLabel" style="margin-left: 12px"></span>
+          </div>
+          <input
+            id="scrubber"
+            type="range"
+            min="0"
+            max="10"
+            step="0.001"
+            value="0"
+          />
+        </div>
+      </div>
+
+      <!-- <details>
+    <summary>JSON schema & integration notes</summary>
+    <div class="muted" style="margin-top:8px;">
+      <p>Provide a <code>keyframes</code> array where each entry describes the world at time <code>t</code> (seconds). Positions are linearly interpolated; discrete fields like <code>dir</code> and <code>heldBy</code> are left-continuous (sticky) from the previous keyframe.</p>
+      <pre><code id="schemaBlock"></code></pre>
+      <ul>
+        <li><strong>Coordinates:</strong> all <code>x</code> are in [0,1].</li>
+        <li><strong>Pickup/drop:</strong> set <code>heldBy</code> on the pebble (preferred) at a keyframe to attach to a robot.</li>
+        <li><strong>Events:</strong> optional markers shown on the mini-timeline below the SVG (e.g., <code>{ t, type: "collision" }</code>).</li>
+        <li><strong>Performance:</strong> This redra ws the SVG each frame; for very large instances, switch to &lt;canvas&gt; with the same data contract.</li>
+      </ul>
+    </div>
+  </details> -->
+    </div>
+
+    <script>
+      /** ---------------------- Demo data (replace this) ---------------------- */
+      const demoData = {{ data|tojson }};
+      /** ---------------------------------------------------------------------- */
+
+      function clamp01(x) { return Math.max(0, Math.min(1, x)); }
+      function lerp(a, b, t) { return a + (b - a) * t; }
+
+      function buildIndex(keyframes) {
+        const sorted = [...keyframes].sort((a,b)=>a.t-b.t);
+        const robotIds = new Set(), pebbleIds = new Set();
+        sorted.forEach(k => {
+          (k.robots||[]).forEach(r => robotIds.add(r.id));
+          (k.pebbles||[]).forEach(p => pebbleIds.add(p.id));
+        });
+        return { keyframes: sorted, robotIds: [...robotIds], pebbleIds: [...pebbleIds] };
+      }
+
+      function interpState(kfA, kfB, t01) {
+        const robots = {}, pebbles = {};
+        const aR = new Map((kfA.robots||[]).map(r=>[r.id,r]));
+        const bR = new Map((kfB.robots||[]).map(r=>[r.id,r]));
+        const idsR = new Set([...aR.keys(), ...bR.keys()]);
+        idsR.forEach(id=>{
+          const A=aR.get(id)||{}, B=bR.get(id)||{};
+          const x = (A.x!=null && B.x!=null) ? lerp(A.x, B.x, t01) : (B.x ?? A.x ?? 0);
+          const dir = (A.dir!==undefined) ? A.dir : B.dir;
+          const carrying = (A.carrying!==undefined) ? A.carrying : B.carrying;
+          robots[id] = { id, x: clamp01(x), dir, carrying };
+        });
+        const aP = new Map((kfA.pebbles||[]).map(p=>[p.id,p]));
+        const bP = new Map((kfB.pebbles||[]).map(p=>[p.id,p]));
+        const idsP = new Set([...aP.keys(), ...bP.keys()]);
+        idsP.forEach(id=>{
+          const A=aP.get(id)||{}, B=bP.get(id)||{};
+          const heldBy = (A.heldBy!==undefined) ? A.heldBy : undefined;
+          let x;
+          if (heldBy) {
+            x = undefined; // attach later
+          } else {
+            x = (A.x!=null && B.x!=null) ? lerp(A.x, B.x, t01) : (B.x ?? A.x ?? 0);
+          }
+          pebbles[id] = { id, x: (x!=null) ? clamp01(x) : undefined, heldBy };
+        });
+        return { robots, pebbles };
+      }
+
+      function findSpan(keyframes, time) {
+        const n = keyframes.length;
+        if (n===0) return [0,0,0];
+        if (time <= keyframes[0].t) return [0,0,0];
+        if (time >= keyframes[n-1].t) return [n-1,n-1,0];
+        let lo=0, hi=n-1;
+        while (lo+1 < hi) {
+          const mid = (lo+hi)>>1;
+          if (keyframes[mid].t <= time) lo = mid; else hi = mid;
+        }
+        const A=keyframes[lo], B=keyframes[hi];
+        const lt = (time - A.t) / (B.t - A.t);
+        return [lo, hi, lt];
+      }
+
+      (function main(data) {
+        const width = 900, height = 220, margin = 24, radius = 10;
+        const stage = document.getElementById('stage');
+        const markers = document.getElementById('markers');
+        const legendEl = document.getElementById('legend');
+        const scrubber = document.getElementById('scrubber');
+        const timeLabel = document.getElementById('timeLabel');
+        const playBtn = document.getElementById('playBtn');
+        const stepBack = document.getElementById('stepBack');
+        const stepFwd = document.getElementById('stepFwd');
+        const speedSel = document.getElementById('speedSel');
+
+        // Build indices & meta
+        const { keyframes, robotIds, pebbleIds } = buildIndex(data.keyframes||[]);
+        const robotMetaMap = new Map((data.robots||[]).map(r=>[r.id, r]));
+        const pebbleMetaMap = new Map((data.pebbles||[]).map(p=>[p.id, p]));
+        const robotsMeta = robotIds.map((id, i)=> robotMetaMap.get(id) || { id, label: id, color: ["#2563eb","#16a34a","#ef4444","#f59e0b"][i%4] });
+        const pebblesMeta = pebbleIds.map((id, i)=> pebbleMetaMap.get(id) || { id, color: ["#6b7280","#8b5cf6","#10b981"][i%3] });
+        const duration = data.duration ?? (keyframes[keyframes.length-1]?.t || 0);
+
+        // Legend
+        legendEl.innerHTML = `
+          ${robotsMeta.map(r=>`
+            <span><span class="dot" style="background:${r.color||'#111827'}"></span> ${r.label||r.id}</span>
+          `).join('')}
+          ${pebblesMeta.map(p=>`
+            <span style="margin-left:14px;"><span class="sq" style="background:${p.color||'#6b7280'}"></span> ${p.id}</span>
+          `).join('')}
+        `;
+
+        // Controls initial
+        scrubber.max = duration || 0;
+        scrubber.value = 0;
+        timeLabel.textContent = `${(0).toFixed(2)}s / ${duration.toFixed(2)}s`;
+
+        // Stage base
+        stage.setAttribute('width', width);
+        stage.setAttribute('height', height);
+        markers.setAttribute('width', width);
+
+        // Schema block
+        const schema = {
+          duration: 10.0,
+          robots: [{ id: "r1", label: "R1", color: "#2563eb" }],
+          pebbles: [{ id: "p1", color: "#f59e0b" }],
+          keyframes: [
+            { t: 0, robots: [{ id: "r1", x: 0.2, dir: +1 }], pebbles: [{ id: "p1", x: 0.4 }] },
+            { t: 2, robots: [{ id: "r1", x: 0.6, dir: +1 }], pebbles: [{ id: "p1", x: 0.6, heldBy: "r1" }] },
+            { t: 4, robots: [{ id: "r1", x: 0.8, dir: -1 }], pebbles: [{ id: "p1", x: 0.8 }] },
+          ],
+          events: [{ t: 1.2, type: "collision", robots: ["r1", "r2"] }],
+        };
+        const schemaBlock = document.getElementById('schemaBlock');
+        if (schemaBlock) {
+          schemaBlock.textContent = JSON.stringify(schema, null, 2);
+        }
+
+        // Events aggregation (top-level + embedded)
+        const eventsTop = data.events || [];
+        const embedded = (data.keyframes||[]).flatMap(k => (k.events||[]).map(e => ({ ...e, t: e.t ?? k.t })));
+        const events = [...eventsTop, ...embedded].sort((a,b)=>a.t-b.t);
+
+        // Helpers
+        const toX = (x01)=> margin + x01 * (width - 2*margin);
+        const lineX0 = margin, lineX1 = width - margin, Y = height/2;
+
+        function draw(t) {
+          // find span + interpolate
+          const [iA, iB, lt] = findSpan(keyframes, t);
+          const state = keyframes.length ? interpState(keyframes[iA], keyframes[iB], (iA===iB)?0:lt) : { robots:{}, pebbles:{} };
+
+          // attach pebbles to robots if held
+          const pebblesDraw = Object.values(state.pebbles).map(p=>{
+            if (p.heldBy) {
+              const rx = state.robots[p.heldBy]?.x ?? 0;
+              return { ...p, x: rx, attached: true };
+            }
+            return { ...p, attached: false };
+          });
+
+          // redraw SVG completely (simple and robust)
+          stage.innerHTML = '';
+
+          // Track
+          const track = document.createElementNS('http://www.w3.org/2000/svg','line');
+          track.setAttribute('x1', lineX0); track.setAttribute('y1', Y);
+          track.setAttribute('x2', lineX1); track.setAttribute('y2', Y);
+          track.setAttribute('stroke', '#111827'); track.setAttribute('stroke-width', '3');
+          track.setAttribute('stroke-linecap', 'round');
+          stage.appendChild(track);
+
+          // 0 and 1 labels
+          const t0 = document.createElementNS('http://www.w3.org/2000/svg','text');
+          t0.setAttribute('x', lineX0); t0.setAttribute('y', Y-12);
+          t0.setAttribute('text-anchor', 'middle'); t0.setAttribute('font-size', '12'); t0.setAttribute('fill', '#6b7280');
+          t0.textContent = '0.0';
+          stage.appendChild(t0);
+          const t1 = document.createElementNS('http://www.w3.org/2000/svg','text');
+          t1.setAttribute('x', lineX1); t1.setAttribute('y', Y-12);
+          t1.setAttribute('text-anchor', 'middle'); t1.setAttribute('font-size', '12'); t1.setAttribute('fill', '#6b7280');
+          t1.textContent = '1.0';
+          stage.appendChild(t1);
+
+          // Pebbles
+          pebblesDraw.forEach(p=>{
+            const meta = pebblesMeta.find(m=>m.id===p.id) || {};
+            const px = toX(p.x ?? 0);
+            const py = Y + (p.attached ? -22 : 18);
+            const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+            rect.setAttribute('x', px - 6); rect.setAttribute('y', py - 6);
+            rect.setAttribute('width', 12); rect.setAttribute('height', 12);
+            rect.setAttribute('rx', 2); rect.setAttribute('ry', 2);
+            rect.setAttribute('fill', meta.color || '#6b7280');
+            rect.appendChild(titleEl(`Pebble ${p.id}${p.attached ? ` (by ${p.heldBy})` : ''}`));
+            stage.appendChild(rect);
+          });
+
+          // Robots
+          Object.values(state.robots).forEach(r=>{
+            const meta = robotsMeta.find(m=>m.id===r.id) || {};
+            const cx = toX(r.x ?? 0), cy = Y;
+            const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+
+            const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+            c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', radius);
+            c.setAttribute('fill', meta.color || '#1f2937');
+            g.appendChild(c);
+
+            // Clamp direction line endpoint within track
+            let dirEnd = cx + (r.dir || 0) * (radius + 8);
+            dirEnd = Math.max(lineX0, Math.min(lineX1, dirEnd));
+            const dirLine = document.createElementNS('http://www.w3.org/2000/svg','line');
+            dirLine.setAttribute('x1', cx); dirLine.setAttribute('y1', cy);
+            dirLine.setAttribute('x2', dirEnd); dirLine.setAttribute('y2', cy);
+            dirLine.setAttribute('stroke', '#111827'); dirLine.setAttribute('stroke-width', '2');
+            g.appendChild(dirLine);
+
+            const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+            label.setAttribute('x', cx); label.setAttribute('y', cy - (radius + 8));
+            label.setAttribute('text-anchor', 'middle'); label.setAttribute('font-size', '12'); label.setAttribute('fill', '#111827');
+            label.textContent = meta.label || r.id;
+            g.appendChild(label);
+
+            stage.appendChild(g);
+          });
+
+          // Markers (events)
+          markers.innerHTML = '';
+          if (events.length && duration > 0) {
+            events.forEach(ev=>{
+              const x = (ev.t / duration) * width - 1;
+              const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+              rect.setAttribute('x', x); rect.setAttribute('y', 0); rect.setAttribute('width', 2); rect.setAttribute('height', 16);
+              rect.setAttribute('fill', (ev.type === 'collision') ? '#ef4444' : '#6b7280');
+              markers.appendChild(rect);
+            });
+          }
+
+          // UI
+          timeLabel.textContent = `${t.toFixed(2)}s / ${duration.toFixed(2)}s`;
+        }
+
+        function titleEl(text) {
+          const t = document.createElementNS('http://www.w3.org/2000/svg','title');
+          t.textContent = text;
+          return t;
+        }
+
+        // Playback loop
+        let playing = true;
+        let speed = 1;
+        let t = 0;
+        let rafId = 0;
+        let last = performance.now();
+
+        function tick(now) {
+          const dt = (now - last) / 1000;
+          last = now;
+          if (playing && duration > 0) {
+            t += dt * speed;
+            if (t >= duration) t = 0; // loop
+            scrubber.value = t;
+            draw(t);
+          }
+          rafId = requestAnimationFrame(tick);
+        }
+        rafId = requestAnimationFrame(tick);
+
+        // Controls events
+        playBtn.addEventListener('click', ()=>{
+          playing = !playing;
+          playBtn.textContent = playing ? 'Pause' : 'Play';
+          playBtn.classList.toggle('primary', playing);
+        });
+
+        speedSel.addEventListener('change', ()=>{
+          speed = parseFloat(speedSel.value);
+        });
+
+        scrubber.addEventListener('input', ()=>{
+          t = parseFloat(scrubber.value);
+          draw(t);
+        });
+
+        function stepFrame(dir) {
+          if (!keyframes.length) return;
+          const [iA, iB] = findSpan(keyframes, t);
+          const targetIdx = dir > 0 ? Math.min(iB + 1, keyframes.length - 1) : Math.max(iA - 1, 0);
+          t = keyframes[targetIdx].t;
+          scrubber.value = t;
+          draw(t);
+        }
+        stepBack.addEventListener('click', ()=> stepFrame(-1));
+        stepFwd.addEventListener('click', ()=> stepFrame(+1));
+
+        // Initial render
+        draw(0);
+
+      })(demoData);
+    </script>
+  </body>
+</html>
