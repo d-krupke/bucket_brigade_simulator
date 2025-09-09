@@ -51,8 +51,8 @@ class LineSimulator:
     def get_time(self):
         return self._time.get_time()
 
-    def create_pebble(self, position: str | float | Decimal | fractions.Fraction):
-        pebble = Pebble(position=position)
+    def create_pebble(self, position: str | float | Decimal | fractions.Fraction, name: str|None = None):
+        pebble = Pebble(position=position, name=name)
         self.pebbles.append(pebble)
         if self._on_pebble_creation_callback:
             self._on_pebble_creation_callback(pebble)

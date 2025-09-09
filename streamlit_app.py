@@ -185,7 +185,7 @@ def simulate_and_get_data_cached(cache_key: str):
             position=robot["position"], speed=robot["speed"], name=robot["name"]
         )
     for pebble in st.session_state.pebbles:
-        sim.create_pebble(position=pebble["position"])
+        sim.create_pebble(position=pebble["position"], name=pebble["id"])
 
     robot_colors = _robot_color_map_from_session()
     pebble_colors = _pebble_color_map_from_session()
@@ -463,7 +463,7 @@ def pebbles_editor():
         )
 
         if submitted_add:
-            new_id = f"p{len(st.session_state.pebbles)}"
+            new_id = f"P{len(st.session_state.pebbles)}"
             st.session_state.pebbles.append(asdict(PebbleUI(new_id, "0.5", "#f59e0b")))
             st.session_state.sim_requested = False
             st.rerun()
@@ -519,14 +519,14 @@ def _get_timeframe(
             "color": robot_colors.get(r.name),
         }
         if r.pebbles:
-            rob["carrying"] = r.pebbles[0].id
+            rob["carrying"] = r.pebbles[0].name
         robots.append(rob)
     for p in sim.pebbles:
         pebbles.append(
             {
-                "id": p.id,
+                "id": p.name,
                 "x": float(p.position),
-                "color": pebble_colors.get(p.id, "#f59e0b"),
+                "color": pebble_colors.get(p.name, "#f59e0b"),
             }
         )
     return {"t": float(t), "robots": robots, "pebbles": pebbles}
@@ -581,7 +581,7 @@ def render_trajectory_plot(data: Dict[str, Any], logger) -> None:
         last_pos = None
         for kf in reversed(data["keyframes"]):
             for p in kf["pebbles"]:
-                if p["id"] == pebble.id:
+                if p["id"] == pebble.name:
                     last_pos = p["x"]
                     break
             if last_pos is not None:
@@ -596,13 +596,13 @@ def render_trajectory_plot(data: Dict[str, Any], logger) -> None:
                 times.append(final_time)
                 positions.append(last_pos)
 
-        color = pebble_color_map.get(pebble.id)
+        color = pebble_color_map.get(pebble.name)
         plt.plot(
             positions,
             times,
             ".--",
             color=color if isinstance(color, str) and color.startswith("#") else None,
-            label=pebble.id,
+            label=pebble.name,
         )
 
     plt.xlabel("position")
